@@ -4,7 +4,6 @@
 #include <time.h>       /* clock_gettime() for seeding the PRNG */
 #include <complex.h>    /* Complex numbers for DFT and its inverse */
 #include <math.h>       /* exp() */
-#include <stdlib.h>     /* malloc() */
 
 #include "utils.h"
 
@@ -93,7 +92,5 @@ double norm(complex double z)
     /* Calculate and return the norm in one line */
     return sqrt(pow(creal(z), 2) + pow(cimag(z), 2));
 }
-
-
 
 #endif
