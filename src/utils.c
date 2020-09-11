@@ -4,6 +4,7 @@
 #include <time.h>       /* clock_gettime() for seeding the PRNG */
 #include <complex.h>    /* Complex numbers for DFT and its inverse */
 #include <math.h>       /* exp() */
+#include <stdlib.h>     /* malloc() */
 
 #include "utils.h"
 
@@ -23,7 +24,7 @@ static void init_prng()
     PRNG_STATE.a = time;
 }
 
-/* Generates a pseudorandom 64-bit number */
+/* Generates a random 64-bit number */
 uint64_t lrandom()
 {
     uint64_t x;
@@ -45,7 +46,7 @@ uint64_t lrandom()
     return x * UINT64_C(0x2545F4914F6CDD1D);
 }
 
-/* Generates a pseudorandom double between 0 and 1 */
+/* Generates a random double between 0 and 1 */
 double drandom()
 {
     /* Generate a random 64-bit number and convert to a double in [0,1] */
@@ -53,11 +54,16 @@ double drandom()
 }
 
 /* Compute the DFT of a set of complex numbers */
-complex double* dft(complex double *X, complex double *x, int N)
+complex double* dft(complex double *x, int N)
 {
+    complex double *X;  /* The resulting transformed complex numbers */
     int k, n;  /* Loop counters */
 
+    /* Allocate memory for the transformed values */
+    X = (complex double*) malloc(N * sizeof(complex double));
+
     /* Compute the DFT */
+    /* Algorithm used from wikipedia */
     for (k = 0; k < N; k++) {
         X[k] = 0;
         for (n = 0; n < N; n++)
@@ -69,11 +75,16 @@ complex double* dft(complex double *X, complex double *x, int N)
 }
 
 /* Compute the inverse DFT of a set of complex numbers */
-complex double* inverse_dft(complex double *x, complex double *X, int N)
+complex double* inverse_dft(complex double *X, int N)
 {
+    complex double *x;  /* The resulting transformed complex numbers */
     int k, n;   /* Loop counters */
 
+    /* Allocate memory for the transformed numbers */
+    x = (complex double*) malloc(N * sizeof(complex double));
+
     /* Compute the inverse DFT */
+    /* Algorithm used from wikipedia */
     for (n = 0; n < N; n++) {
         x[n] = 0;
         for (k = 0; k < N; k++) {
