@@ -6,6 +6,9 @@
 #include <math.h>       /* exp() */
 #include <stdlib.h>     /* malloc() */
 
+#include <opencore-amrnb/interf_enc.h>  /* For AMR-NB Encoding */
+#include <opencore-amrnb/interf_dec.h>  /* For AMR-NB Decoding */
+
 #include "utils.h"
 
 /* Initialize the PRNG state */
@@ -63,7 +66,6 @@ complex double* dft(complex double *x, int N)
     X = (complex double*) malloc(N * sizeof(complex double));
 
     /* Compute the DFT */
-    /* Algorithm used from wikipedia */
     for (k = 0; k < N; k++) {
         X[k] = 0;
         for (n = 0; n < N; n++)
@@ -84,7 +86,6 @@ complex double* inverse_dft(complex double *X, int N)
     x = (complex double*) malloc(N * sizeof(complex double));
 
     /* Compute the inverse DFT */
-    /* Algorithm used from wikipedia */
     for (n = 0; n < N; n++) {
         x[n] = 0;
         for (k = 0; k < N; k++) {
@@ -102,6 +103,47 @@ double norm(complex double z)
 {
     /* Calculate and return the norm in one line */
     return sqrt(pow(creal(z), 2) + pow(cimag(z), 2));
+}
+
+/* Simulate a GSM network */
+void simulate_gsm(double *signal, int length)
+{
+    void *amr_enc,  /* The encoding state */
+         *amr_dec;  /* The decoding state */
+    enum Mode mode = MR122; /* Only encode in 12.2kbps mode for now */
+    short enc_in[160];  /* Encoder requires 160 shorts at a time */
+    uint8_t enc_out[500];   /* Encoder produces 500 bytes at a time */
+    int16_t dec_out[160];   /* Decoder produces 160 16-bit ints ata time */
+    int dtx = 1;    /* Simulate with DTX on */
+
+    /* Initialize both states */
+    amr_enc = Encoder_Interface_init(dtx);
+    amr_dec = Decoder_Interface_init();
+
+    /* Process the input 160 samples at a time */
+    for (int i = 0; i < ceil(length / 160); i++) {
+
+        /*
+         * Convert to signed 16-bit PCM, padding with zeroes if the signal is
+         * less than a multiple of 160 samples.
+         */
+        for (int j = 0; j < 160; j++) {
+            if (i * 160 + j < length)
+                enc_in[j] = round(signal[i * 160 + j] * 32767);
+            else
+                enc_in[j] = 0;
+        }
+
+        /* Encode the data, then decode it */
+        Encoder_Interface_Encode(amr_enc, mode, enc_in, enc_out, 0);
+        Decoder_Interface_Decode(amr_dec, enc_out, dec_out, 0);
+
+        /* Replace the input data with the simulated signal */
+        for (int j = 0; j < 160; j++) {
+            if (i * 160 + j < length)
+                signal[i * 160 + j] = (double) dec_out[j] / 32768.0;
+        }
+    }
 }
 
 #endif

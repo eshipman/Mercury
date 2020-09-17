@@ -7,167 +7,322 @@
 #include <complex.h>    /* Complex numbers */
 #include <errno.h>      /* Errors from parsing user input */
 
-#include <opencore-amrnb/interf_enc.h>
-#include <opencore-amrnb/interf_dec.h>
-
 #include "build.h"
-#include "utils.c"      /* randint() */
+#include "utils.c"
 
-void simulate_gsm(double *signal)
-{
-    /*
-    enum Mode mode = MR122;
-    void *amr;
-    uint8_t* outbuff;
-    short *inbuff;
-    int16_t *tmp;
-    double *output;
-    uint8_t* decbuff;
-    int dtx = 0;
-    int i;
-
-    inbuff = malloc(length * sizeof(short));
-    for (i = 0; i < length; i++) {
-        inbuff[i] = signal[i] * 32767;
-    }
-    
-    outbuff = malloc(length);
-
-    amr = Encoder_Interface_init(dtx);
-
-    for (i = 0; i < length / 160; i++) {
-        Encoder_Interface_Encode(amr, mode, inbuff, outbuff, 0);
-    }
-
-    Encoder_Interface_exit(amr);
-
-    amr = Decoder_Interface_init();
-
-    Decoder_Interface_Decode(amr, outbuff, tmp, 0);
-
-    free(inbuff);
-*/
-    return;
+/* Encode a symbol in the alphabet */
+double* encode(int value, double **syms) {
+    return syms[value];
 }
 
-complex double** generate_alphabet(int N, int M, int K)
-{
-    double complex *z,      /* The complex numbers for generating the symbols */
-                   **phi;   /* The frequency domain for each symbol */
-    int i, k;   /* Loop counters */
+/* Decode by finding which has the maximum dot product */
+int decode(double *recv, double **syms, int N, int M) {
+    int i, j;
+    double prod, max;
+    int output = 0;
 
-    /* Allocate the complex numbers */
-    z = (double complex*) malloc(K * sizeof(double complex));
-
-    /* Allocate the frequency domains (an array for each symbol) */
-    phi = (double complex**) malloc(N * sizeof(double complex*));
-
-    /* Generate N symbols */
+    /* Check each symbol */
     for (i = 0; i < N; i++) {
+        prod = 0;
 
-        /* Generate K random complex numbers for each symbol */
-        for (k = 0; k < K; k++) {
-            z[k] = (2 * drandom() - 1) + (2 * drandom() - 1) * I;
+        /* Perform the dot product of this symbol with the received symbol */
+        for (j = 0; j < M; j++) {
+            prod += syms[i][j] * recv[j];
         }
 
-        phi[i] = get_frequency_domain(z, N, M, K);
+        /* If the dot product is higher, save this index */
+        if (i == 0 || prod > max) {
+            max = prod;
+            output = i;
+        }
     }
 
-    free(z);
-
-    return phi;
+    /* Return the most likely symbol */
+    return output;
 }
 
-/* Generate a neighbor to the given state vector */
-complex double* neighbor(complex double *current, int n, double delta)
+/* Generate the initial state */
+complex double* initial_state(int N, int M, int K)
 {
-    complex double *output, /* The neighboring state vector */
-                   tmp;     /* A temp variable to store the possible element */
-    int done,   /* Loop condition */
-        i;      /* Loop counter */
+    complex double *state;  /* The generated initial state */
+    int i;  /* Loop counters */
 
-    /* Allocate the neighbor's state vector */
-    output = (complex double*) malloc(n * sizeof(complex double));
+    /* Allocate N*K complex numbers for the state */
+    state = malloc(N * K * sizeof(complex double));
 
-    /* Set each element in the to be near each element of the curretn */
-    for (i = 0; i < n; i++) {
-        done = 0;
+    /* Generate K active fourier bins for each of the N symbols */
+    for (i = 0; i < N * K; i++)
+        state[i] = (2 * drandom() - 1) + (2 * drandom() - 1) * I;
 
-        /* Generate random values until one is found within the bounds */
-        while (!done) {
-            /*
-             * Add the random complex number to the current state. The
-             * components must be within delta of the current value.
-             */
-            tmp = current[i]
-                + (complex double) ((delta * drandom() * 2 - 1)
-                + (delta * drandom() * 2 - 1) * I);
+    return state;
+}
 
-            /*
-             * This search is done when both the real and imaginary components
-             * are in the range [-1, 1].
-             */
-            done = creal(tmp) >= -1 && creal(tmp) <= 1
-                && cimag(tmp) >= -1 && cimag(tmp) <= 1;
+/* Get the directional vectors */
+complex double** get_D(int N, int K)
+{
+    int i, j;   /* Loop counters */
+    complex double **output;    /* The directional vectors */
+
+    /* Initialize the output with 2 * P vectors */
+    output = (complex double**) malloc(sizeof(complex double*) * 2 * (N * 2 * K));
+
+    for (i = 0; i < 2 * (N * 2 * K); i++) {
+        /* Allocate each vector as N*K dimensions */
+        output[i] = (complex double*) malloc(N * K * sizeof(complex double));
+
+        /* Set everything to 0 */
+        for (j = 0; j < N * K; j++)
+            output[i][j] = 0.0;
+
+        /* Set the first half to positive, the second is negative */
+        if (i < N * 2 * K) {
+            /* Odd positions are real, even are imaginary */
+            if (i % 2 == 0)
+                output[i][i / 2] = 1.0;
+            else
+                output[i][i / 2] = 1.0 * I;
+        } else {
+            /* Odd positions are real, even are imaginary */
+            if (i % 2 == 0)
+                output[i][(i % (N * 2 * K)) / 2] = -1.0;
+            else
+                output[i][(i % (N * 2 * K)) / 2] = -1.0 * I;
         }
-
-        printf("neighbor: <%lf, %lf>\n", creal(tmp - current[i]), cimag(tmp - current[i]));
-        /* Set the output value for this index */
-        output[i] = tmp;
     }
 
     return output;
 }
 
-/*
- * Get the probability of choosing a solution based on the error rates and time
- */
-double P(double old, double new, double t)
+/* Score the state */
+double score(complex double *state, int N, int M, int K)
 {
-    return exp(-new / (old * t));
+    return E(state, N, M, K, 1000);
 }
 
-/* Convert random complex numbers to a frequency domain */
-complex double* get_frequency_domain(complex double *z, int N, int M, int K)
+/* Determine if the state and directional vector combo is feasible */
+int is_feasible(complex double *state, int size, complex double *d, double delta)
 {
-    complex double *phi;    /* The frequency domain */
-    int k;      /* Loop counter */
-    int k_N;    /* The index corresponding to the Nyquist frequency */
+    complex double tmp; /* Temporary checking variable */
+    int fail,   /* Failure checking variable */
+        i;      /* Loop counter */
 
-    /* Is k_N always M / 2 ? */
-    k_N = M / 2;
+    fail = 0;
 
-    /* Allocate space for the frequency domain */
-    phi = (complex double*) malloc((M + 1) * sizeof(complex double));
+    /* Check each component of the state vector */
+    for (i = 0; i < size; i++) {
+        /* Calculate the new component */
+        tmp = state[i] + (d[i] * delta);
 
-    /*
-     * Produce the complex spectrum for the symbol according to the following:
-     *
-     * phi_k =  0,          if k = 0                (1)
-     *          z_k,        if k = 1, ..., K        (2)
-     *          0,          if k = K + 1, ..., k_N  (3)
-     *          z_(M-k+1])* if k = k_N + 1, ..., M  (4)
-     */
+        /* If value is outside either bound, this state fails */
+        fail = creal(tmp) < -1.0 || creal(tmp) > 1.0
+            || cimag(tmp) < -1.0 || cimag(tmp) > 1.0;
 
-    /* Rule 1: phi_k = 0, if k = 0 */
-    phi[0] = 0;
-
-    /* Rule 2: phi_k = z_k, if k = 1, ..., K */
-    for (k = 1; k <= K; k++) {
-        phi[k] = z[k];
+        /* If this component failed, return early */
+        if (fail)
+            return 0;
     }
 
-    /* Rule 3: phi_k = 0, if k = K + 1, ..., k_N */
-    for (k = K + 1; k <= k_N; k++) {
-        phi[k] = 0;
+    /* The state must not have failed */
+    return 1;
+}
+
+/* Set the next candidate vector by applying the directional vector to the state */
+void set_neighbor(complex double *dest, complex double *state, int size, complex double *d, double delta)
+{
+    int i;  /* Loop counter */
+
+    /* Set every component of the state vector */
+    for (i = 0; i < size; i++) {
+        /* Set the destination to state + (d * delta) */
+        dest[i] = state[i] + (d[i] * delta);
+    }
+}
+
+/* Optimize the starting state via Pattern Search */
+double** optimize(complex double *state, struct PSArgs args)
+{
+    int min_index,  /* The index of the minimum scoring candidate state */
+        n,      /* Dimensionality of the state vector */
+        P,      /* The number of directional vectors */
+        k, i;   /* Loop counter */
+    double delta,       /* The delta between iterations */
+           cost,        /* The current state's cost score */
+           min_cost;    /* The minimum cost score of the candidate states */
+    complex double **next;  /* The next iteration's state vectors */
+
+    /* Set the dimensionality */
+    n = args.N * args.K * 2;
+
+    /* Set the number of directions */
+    P = 2 * n;
+
+    /* Set the initial delta */
+    delta = args.delta_0;
+
+    /* Get the initial score */
+    cost = score(state, args.N, args.M, args.K);
+
+    /* Allocate space for P state vectors of dimensionality n */
+    next = (complex double**) malloc(sizeof(complex double*) * P);
+    for (i = 0; i < P; i++) {
+        next[i] = (complex double*) malloc(sizeof(complex double) * args.N * args.K);
     }
 
-    /* Rule 4: phi_k = z_(M-k+1)* if k = k_N + 1, ..., M */
-    for (k = k_N + 1; k <= M; k++) {
-        phi[k] = conj(z[M - k + 1]);
+    /* Loop until either the max iterations or minimum delta is reached */
+    for (k = 0; k < args.max_iter && delta >= args.tolerance; k++) {
+
+        min_index = -1;
+        min_cost = 1.0;
+
+        /* Check each candidate state vector */
+#pragma omp parallel for num_threads(THREADS)
+        for (i = 0; i < P; i++) {
+            /*
+             * If the candidate is feasible, set the next state
+             * Else, set it the first component to 2 to mark is infeasible
+             */
+            if (is_feasible(state, args.N * args.K, args.D[i], delta)) {
+                /* Set the state */
+                set_neighbor(next[i], state, args.N * args.K, args.D[i], delta);
+
+                /* Get its score */
+                double tmp = score(next[i], args.N, args.M, args.K);
+
+                /* If it's the best score so far, save its info */
+                if (i == 0 || tmp < min_cost) {
+                    min_index = i;
+                    min_cost = tmp;
+                }
+            }
+        }
+
+        /*
+         * If there was a better state, choose it
+         * If not, halve the search distance
+         */
+        if (min_index < 0) {
+            printf("%03d, %lf: No suitable candidate state vectors\n", k, delta);
+            
+            delta /= 2.0;
+        } else if (min_index >= 0 && min_cost < cost) {
+            printf("%03d, %lf: Changing from %.4lf to %.4lf\n", k, delta, cost, min_cost);
+            
+            /* Set the cost */
+            cost = min_cost;
+
+            /* Copy each element of the state */
+            for (i = 0; i < args.N * args.K; i++) {
+                state[i] = next[min_index][i];
+            }
+
+            /* Double the search distance */
+            delta *= 2.0;
+        } else {
+            printf("%03d, %lf: Keeping %.4lf instead of %.4lf\n", k, delta, cost, min_cost);
+
+            /* Halve the search distance */
+            delta /= 2.0;
+        }
+
     }
 
-    return phi;
+    /* Clean up memory */
+    for (i = 0; i < P; i++)
+        free(next[i]);
+    free(next);
+
+    return state_to_time(state, args.N, args.M, args.K);
+}
+
+/* Calculate the error rate */
+double E(complex double *state, int N, int M, int K, int iter)
+{
+    double **td,    /* The time domain of the alphabet */
+           output,  /* The error rate score */
+           *tmp;    /* Temporary */
+    int *values,    /* The list of values encoded */
+        wrong,      /* The number of incorrect decodes */
+        total,      /* The total number of decodes */
+        i;          /* Loop counter */
+
+    output = 0.0;
+
+    /* Get the time domain representation of the state vector */
+    td = state_to_time(state, N, M, K);
+
+    /* Allocate space for the values and their encodings */
+    tmp = malloc(iter * M * sizeof(double));
+    values = malloc(iter * sizeof(int));
+
+    /* Encode iter random symbols */
+    for (i = 0; i < iter; i++) {
+        /* Pick a random value to encode */
+        values[i] = lrandom() % N;
+
+        /* Copy the value from the alphabet to the signal array */
+        memcpy(&tmp[i * M], td[values[i]], M * sizeof(double));
+    }
+
+    /* Compress and decompress the signal to simulate a GSM network */
+    simulate_gsm(tmp, iter * M);
+
+    wrong = total = 0;
+
+    /* Try decoding every symbol */
+    for (i = 0; i < iter; i++) {
+        /* Decode it as an integer */
+        int dec = decode(&tmp[i * M], td, N, M);
+
+        /* If it was wrong, increment the number of incorrects */
+        if (dec != values[i])
+            wrong++;
+
+        total++;
+    }
+
+    /* Return the result as the percentage incorrect */
+    output = (double) wrong / total;
+
+    /* Deallocate the no longer needed memory */
+    for (i = 0; i < N; i++)
+        free(td[i]);
+    free(tmp);
+    free(td);
+
+    return output;
+}
+
+/* Convert a state vector to a time domain representation of the alphabet */
+double** state_to_time(complex double *state, int N, int M, int K)
+{
+    complex double **fd;    /* The frequency domain of the state */
+    int i, j;   /* Loop counters */
+
+    /* Allocate memory for N symbols */
+    fd = (complex double**) malloc(N * sizeof(complex double));
+
+    /* Convert each of the K subcarriers into frequency domains */
+    for (i = 0; i < N; i++)
+        fd[i] = get_frequency_domain(&state[i * K], N, M, K);
+
+    /* Convert the frequency domains to time domains */
+    return get_time_domain(fd, N, M, K);
+}
+
+/* Convert an alphabet from frequency domain to time domain */
+double** get_time_domain(complex double **phi, int N, int M, int K)
+{
+    double **output;    /* The real-valued time domain */
+    int i;   /* Loop counter */
+
+    /* Allocate memory for the real-valued time domain */
+    output = (double**) malloc(N * sizeof(double*));
+
+    /* Convert each symbol to its time domain */
+    for (i = 0; i < N; i++)
+        output[i] = to_time_domain(phi[i], N, M, K);
+
+    return output;
 }
 
 /* Convert a frequency domain to a real-valued time domain */
@@ -188,7 +343,7 @@ double* to_time_domain(complex double *phi, int N, int M, int K)
         /* If one component is non-zero, divide by norm() */
         if (creal(g[k]) != 0 || cimag(g[k]) != 0)
             g[k] = g[k] / norm(g[k]);
-        
+
         /* Save the real part */
         if (k < M)
             output[k] = creal(g[k]);
@@ -200,172 +355,47 @@ double* to_time_domain(complex double *phi, int N, int M, int K)
     return output;
 }
 
-double** get_time_domain(complex double **phi, int N, int M, int K)
+/* Convert random complex numbers to a frequency domain */
+complex double* get_frequency_domain(complex double *z, int N, int M, int K)
 {
-    double **output;    /* The real-valued time domain */
-    int i;   /* Loop counter */
+    complex double *phi;    /* The frequency domain */
+    int k_N,    /* The index corresponding to the Nyquist frequency */
+        k;      /* Loop counter */
 
-    /* Allocate space for the real-valued time domain */
-    output = (double**) malloc(N * sizeof(double*));
+    /* The index of the Nyquist frequency is M / 2 */
+    k_N = M / 2;
 
-    /* Convert each symbol to its time domain */
-    for (i = 0; i < N; i++) {
-        output[i] = to_time_domain(phi[i], N, M, K);
-    }
+    /* Allocate memory for the frequency domain */
+    phi = (complex double*) malloc((M + 1) * sizeof(complex double));
 
-    return output;
-}
+    /*
+     * Produce the complex spectrum for the symbol according to the following:
+     *
+     * phi_k =  0,          if k = 0                    (1)
+     *          z_(k-1),    if k = 1, ..., K            (2)
+     *          0,          if k = K + 1, ..., k_N      (3)
+     *          z_(M-k-1)*  if k = k_N + 1, ..., M - 1  (4)
+     *          0           if k = M
+     */
 
-double E(complex double *state, int N, int M, int K, int iter)
-{
-    double **td;
-    double output,
-           *tmp;
-    int *values;
-    int i;
-    int wrong, total;
+    /* Rule 1: phi_k = 0, if k = 0 */
+    phi[0] = 0;
 
-    output = 0.0;
+    /* Rule 2: phi_k = z_(k-1), if k = 1, ..., K */
+    for (k = 1; k <= K; k++)
+        phi[k] = z[k - 1];
 
-    td = state_to_time(state, N, M, K);
+    /* Rule 3: phi_k = 0, if k = K + 1, ..., k_N */
+    for (k = K + 1; k <= k_N; k++)
+        phi[k] = 0;
 
-    tmp = malloc(iter * M * sizeof(double));
-    values = malloc(iter * sizeof(int));
+    /* Rule 4: phi_k = z_(M-k-1)* if k = k_N + 1, ..., M - 1 */
+    for (k = k_N + 1; k < M; k++)
+        phi[k] = conj(z[M - k - 1]);
 
-    for (i = 0; i < iter; i++) {
-        /* Pick a random value to encode */
-        values[i] = lrandom() % N;
+    phi[M] = 0;
 
-        /* Copy the value from the alphabet to the signal array */
-        memcpy(&tmp[i * M], td[values[i]], M * sizeof(double));
-    }
-
-    /* Simulate a GSM network */
-    simulate_gsm(tmp);
-
-    wrong = total = 0;
-
-    for (i = 0; i < M; i++) {
-        printf("E: %lf\n", tmp[i]);
-    }
-
-    for (i = 0; i < iter; i++) {
-        int dec = decode(&tmp[i * M], td, N, M);
-        if (dec != values[i]) {
-            printf("E: Thought %d, was %d\n", dec, values[i]);
-            wrong++;
-        }
-        total++;
-    }
-
-    output = (double) wrong / total;
-
-    for (i = 0; i < N; i++) {
-        free(td[i]);
-    }
-    free(tmp);
-    free(td);
-
-    return output;
-}
-
-/* Convert a frequency domain to state */
-void set_state(complex double *state, complex double **x, int N, int K)
-{
-    int i, j;
-    for (i = 0; i < N; i++) {
-        for (j = 0; j < K; j++) {
-            state[i * K + j] = x[i][j];
-            printf("set_state: <%lf, %lf>\n", creal(x[i][j]), cimag(x[i][j]));
-        }
-    }
-}
-
-double** state_to_time(complex double *state, int N, int M, int K)
-{
-    complex double **fd;
-    int i;
-
-    fd = (complex double**) malloc(N * sizeof(complex double));
-
-    for (i = 0; i < N; i++)
-        fd[i] = get_frequency_domain(state, N, M, K);
-
-    return get_time_domain(fd, N, M, K);
-}
-
-double** optimize(complex double **x, int N, int M, int K, int delta, int k_max)
-{
-    complex double *state,  /* The current state vector */
-            *next;   /* The candidate next state */
-    double old_ber, /* The score of the current state */
-           new_ber; /* The score of the candidate state */
-    int ber_valid,  /* Whether the current BER is valid */
-        k;          /* Loop counter */
-
-    /* Allocate space for the vector */
-    state = (complex double*) malloc(N * K * sizeof(complex double));
-
-    // Set the state
-    set_state(state, x, N, K);
-
-    /* Initialize the set flag to 0 */
-    ber_valid = 0;
-
-    for (k = 0; k < k_max; k++) {
-        /* Generate a candidate neighbor state */
-        next = neighbor(state, N * K, delta);
-
-        /* Get the BER of the new state */
-        new_ber = E(next, N, M, K, RANDOM_NOISE_ITER);
-
-        /* If the BER isn't valid, update the BER */
-        if (!ber_valid)
-            old_ber = E(state, N, M, K, RANDOM_NOISE_ITER);
-
-        /* Set to 1 so BER isn't calculated redundantly */
-        ber_valid = 1;
-
-        /*
-         * Probabilistically choose the generated state based on the time and
-         * the BER for both states.
-         */
-        if (P(old_ber, new_ber, (k + 1) / k_max) >= drandom()) {
-            printf("Changing state from %lf to %lf BER\n", old_ber, new_ber);
-            memcpy(state, next, N * K * sizeof(complex double));
-            ber_valid = 0;
-        } else {
-            printf("Keeping state of %lf instead of %lf\n", old_ber, new_ber);
-        }
-        fflush(stdout);
-
-        free(next);
-    }
-
-    return state_to_time(state, N, M, K);
-}
-
-double* encode(int value, double **syms) {
-    return syms[value];
-}
-
-/* Decode by finding which has the maximum dot product */
-int decode(double *recv, double **syms, int N, int M) {
-    int i, j;
-    double prod, max;
-    int output = 0;
-    for (i = 0; i < N; i++) {
-        prod = 0;
-        for (j = 0; j < M; j++) {
-            prod += syms[i][j] * recv[j];
-        }
-        if (i == 0 || (i > 0 && prod > max)) {
-            max = prod;
-            output = i;
-        }
-    }
-
-    return output;
+    return phi;
 }
 
 int main(int argc, char **argv)
@@ -374,13 +404,12 @@ int main(int argc, char **argv)
         M,      /* The number of samples per symbol */
         K;      /* The number of subcarriers */
     char *ptr;  /* Pointer for passing to strtol() */
-    complex double **syms;  /* The speech like symbols */
-    double **alphabet;
+    double **alphabet;  /* The speech like symbols */
 
     /* Verify the number of arguments is correct */
     if (argc < 4) {
         fprintf(stderr,
-                "Usage: %s <N value ([1,inf])> <M value ([1,inf])> <K value ([1,inf])>", argv[0]);
+                "Usage: %s <N value ([1,inf])> <M value ([1,inf])> <K value ([1,inf])>\n", argv[0]);
         return ERROR_USAGE;
     }
 
@@ -429,27 +458,24 @@ int main(int argc, char **argv)
         return ERROR_USAGE;
     }
 
-    syms = generate_alphabet(N, M, K);
-    //alphabet = optimize(syms, N, M, K, 0.1, 1000);
-    alphabet = get_time_domain(syms, N, M, K);
-    
-    int i;
-    int wrong, total;
-    wrong = total = 0;
-    for (i = 0; i < 1; i++) {
-        int value = lrandom() % N;
+    /* Build the arguments */
+    struct PSArgs args;
+    args.D = get_D(N, K);   /* Get the standard directional vectors */
+    args.delta_0 = 0.25;    /* Set the initial delta */
+    args.tolerance = pow(10, -12); /* Set the tolerance */
+    args.max_iter = 1000;   /* Set the maximum number of iterations */
+    args.N = N;     /* Set the given N, M, & K */
+    args.M = M;
+    args.K = K;
 
-        double *sig = encode(value, alphabet);
-        int dec = decode(sig, alphabet, N, M);
+    /* Generate an initial state */
+    complex double *start = initial_state(N, M, K);
 
-        if (value != decode(sig, alphabet, N, M)) {
-            wrong++;
-            printf("Thought %d, was %d\n", dec, value);
-        }
-        total++;
-    }
+    /* Optimize the state and return a real-valued time domain alphabet */
+    alphabet = optimize(start, args);
 
-    printf("Final total %lf%%\n", (double) wrong / total);
+    /* Print the error rate */
+    printf("Final total %lf%%\n", E(start, N, M, K, 10000) * 100);
 
     return SUCCESS;
 }

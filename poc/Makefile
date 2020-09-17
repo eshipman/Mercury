@@ -1,9 +1,12 @@
 CC = gcc
-FLAGS = -O3 -pedantic -Wall
-LIBS = -lm -lrt
+FLAGS = -g -fopenmp
+DEFS = -DTHREADS=8
+LIBS = -lm -lrt -lopencore-amrnb
+
+all: build
 
 build: build.c
-	${CC} ${FLAGS} -o build build.c ${LIBS}
+	${CC} ${FLAGS} ${DEFS} -o build build.c ${LIBS}
 
 clean:
 	rm -rf build

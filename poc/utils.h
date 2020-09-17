@@ -7,6 +7,12 @@
 static int PRNG_SEEDED = 0;
 
 /* The internal state of the xorshift* PRNG */
+/**
+ * STRUCTURE: PRNG_STATE
+ * ---------------------
+ * The current state of the PseudoRandom Number Generator.
+ * a - The state as a 64-bit integer
+ */
 static struct PRNG_STATE {
     uint64_t a;
 } PRNG_STATE;
@@ -14,7 +20,7 @@ static struct PRNG_STATE {
 /**
  * FUNCTION: init_prng
  * -------------------
- * Seeds the PRNG with the current time in nanoseconds
+ * Seeds the PRNG with the current time in nanoseconds.
  * ARGS  :
  * RETURN:
  * INPUT : The current time in nanoseconds
@@ -25,7 +31,7 @@ static void init_prng();
 /**
  * Function: lrandom
  * -----------------
- * Generates a random number using the xorshift* PRNG
+ * Generates a random number using the xorshift* PRNG.
  * ARGS  :
  * RETURN: A pseudorandom 64-bit number
  * INPUT : PRNG_STATE - the current state of the PRNG
@@ -36,7 +42,7 @@ uint64_t lrandom();
 /**
  * FUNCTION: drandom
  * -----------------
- * Generates a random double in the range [0,1] using the xorshift* PRNG
+ * Generates a random double in the range [0,1] using the xorshift* PRNG.
  * ARGS  :
  * RETURN: A pseudorandom double
  * INPUT : PRNG_STATE - the current state of the PRNG
@@ -82,5 +88,20 @@ complex double* inverse_dft(complex double *X, int N);
  * OUTPUT:
  */
 double norm(complex double z);
+
+/**
+ * FUNCTION: simulate_gsm
+ * ----------------------
+ * Simulate a GSM compressed voice channel by encoding and decoding the signal
+ * using AMR-NB at 12.2 Kbps.
+ * ARGS  : signal - The signal to run through simulated GSM
+ *         length - The number of samples in the signal
+ * RETURN:
+ * INPUT :
+ * OUTPUT: signal - The signal as it would be received on the other end of a
+ *                  GSM call over AMR-NB
+ */
+void simulate_gsm(double *signal, int length);
+
 
 #endif
