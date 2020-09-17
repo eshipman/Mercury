@@ -243,7 +243,7 @@ double E(complex double *state, int N, int M, int K, int iter)
     int *values,    /* The list of values encoded */
         wrong,      /* The number of incorrect decodes */
         total,      /* The total number of decodes */
-        i;          /* Loop counter */
+        i, j;       /* Loop counters */
 
     output = 0.0;
 
@@ -273,11 +273,14 @@ double E(complex double *state, int N, int M, int K, int iter)
         /* Decode it as an integer */
         int dec = decode(&tmp[i * M], td, N, M);
 
-        /* If it was wrong, increment the number of incorrects */
-        if (dec != values[i])
-            wrong++;
+        /* Check each of the bits in the decoded value */
+        for (j = 0; j < ceil(log(N) / log(2)); j++) {
+            /* If the bits don't match, it's wrong */
+            if (((dec >> i) & 1) != ((values[i] >> i) & 1))
+                wrong++;
 
-        total++;
+            total++;
+        }
     }
 
     /* Return the result as the percentage incorrect */
@@ -462,8 +465,8 @@ int main(int argc, char **argv)
     struct PSArgs args;
     args.D = get_D(N, K);   /* Get the standard directional vectors */
     args.delta_0 = 0.25;    /* Set the initial delta */
-    args.tolerance = pow(10, -12); /* Set the tolerance */
-    args.max_iter = 1000;   /* Set the maximum number of iterations */
+    args.tolerance = 0.0; /* Set the tolerance */
+    args.max_iter = 2000;   /* Set the maximum number of iterations */
     args.N = N;     /* Set the given N, M, & K */
     args.M = M;
     args.K = K;
