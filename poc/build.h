@@ -9,7 +9,7 @@
  * The required arguments for Pattern Search.
  * D         - The list of directional vectors
  * delta_0   - The initial delta
- * tolerance - The minimum delta
+ * tolerance - The cost at which to stop
  * max_iter  - The maximum number of iterations
  * N         - The number of symbols in the alphabet
  * K         - The number of active subcarriers

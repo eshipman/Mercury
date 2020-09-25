@@ -26,7 +26,8 @@ static struct PRNG_STATE {
  * INPUT : The current time in nanoseconds
  * OUTPUT: Updates PRNG_STATE with a 64-bit seed
  */
-static void init_prng();
+static void
+init_prng();
 
 /**
  * Function: lrandom
@@ -37,7 +38,8 @@ static void init_prng();
  * INPUT : PRNG_STATE - the current state of the PRNG
  * OUTPUT:
  */
-uint64_t lrandom();
+uint64_t
+lrandom();
 
 /**
  * FUNCTION: drandom
@@ -48,7 +50,8 @@ uint64_t lrandom();
  * INPUT : PRNG_STATE - the current state of the PRNG
  * OUTPUT:
  */
-double drandom();
+double
+drandom();
 
 /**
  * FUNCTION: dft
@@ -61,7 +64,8 @@ double drandom();
  * INPUT :
  * OUTPUT:
  */
-complex double* dft(complex double *x, int N);
+complex double*
+dft(complex double *x, int N);
 
 /**
  * FUNCTION: inverse_dft
@@ -75,7 +79,8 @@ complex double* dft(complex double *x, int N);
  * INPUT :
  * OUTPUT:
  */
-complex double* inverse_dft(complex double *X, int N);
+complex double*
+inverse_dft(complex double *X, int N);
 
 /**
  * FUNCTION: norm
@@ -87,7 +92,8 @@ complex double* inverse_dft(complex double *X, int N);
  * INPUT :
  * OUTPUT:
  */
-double norm(complex double z);
+double
+norm(complex double z);
 
 /**
  * FUNCTION: simulate_gsm
@@ -101,7 +107,8 @@ double norm(complex double z);
  * OUTPUT: signal - The signal as it would be received on the other end of a
  *                  GSM call over AMR-NB
  */
-void simulate_gsm(double *signal, int length);
+void
+simulate_gsm(double *signal, int length);
 
 /**
  * FUNCTION: secded_encode
@@ -115,7 +122,8 @@ void simulate_gsm(double *signal, int length);
  * INPUT :
  * OUTPUT:
  */
-void secded_encode(uint8_t *out, uint8_t *data, size_t sz);
+void
+secded_encode(uint8_t *out, uint8_t *data, size_t sz);
 
 /**
  * FUNCTION: secded_decode
@@ -133,6 +141,7 @@ void secded_encode(uint8_t *out, uint8_t *data, size_t sz);
  *         *derr - The number of errors in the input that could not be
  *                 corrected but could be detected
  */
-void secded_decode(uint8_t* out, uint8_t *data, size_t sz, int *cerr, int *derr);
+void
+secded_decode(uint8_t* out, uint8_t *data, size_t sz, int *cerr, int *derr);
 
 #endif

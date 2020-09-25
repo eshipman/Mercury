@@ -165,11 +165,12 @@ double** optimize(complex double *state, struct PSArgs args)
     /* Allocate space for P state vectors of dimensionality n */
     next = (complex double**) malloc(sizeof(complex double*) * P);
     for (i = 0; i < P; i++) {
-        next[i] = (complex double*) malloc(sizeof(complex double) * args.N * args.K);
+        next[i] = (complex double*) malloc(sizeof(complex double) * args.N
+                * args.K);
     }
 
-    /* Loop until either the max iterations or minimum delta is reached */
-    for (k = 0; k < args.max_iter && delta >= args.tolerance; k++) {
+    /* Loop until either the max iterations or target cost is reached */
+    for (k = 0; k < args.max_iter && cost >= args.tolerance; k++) {
 
         min_index = -1;
         min_cost = 1.0;
@@ -201,11 +202,13 @@ double** optimize(complex double *state, struct PSArgs args)
          * If not, halve the search distance
          */
         if (min_index < 0) {
-            printf("%03d, %lf: No suitable candidate state vectors\n", k, delta);
+            printf("%06d, %.3e: No suitable candidate state vectors\n", k,
+                    delta);
             
             delta /= 2.0;
         } else if (min_index >= 0 && min_cost < cost) {
-            printf("%03d, %lf: Changing from %.4lf to %.4lf\n", k, delta, cost, min_cost);
+            printf("%06d, %.3e: Changing from %.2e to %.2e\n", k, delta, cost,
+                    min_cost);
             
             /* Set the cost */
             cost = min_cost;
@@ -218,7 +221,8 @@ double** optimize(complex double *state, struct PSArgs args)
             /* Double the search distance */
             delta *= 2.0;
         } else {
-            printf("%03d, %lf: Keeping %.4lf instead of %.4lf\n", k, delta, cost, min_cost);
+            printf("%06d, %.3e: Keeping %.2e instead of %.2e\n", k, delta, cost,
+                    min_cost);
 
             /* Halve the search distance */
             delta /= 2.0;
@@ -412,7 +416,8 @@ int main(int argc, char **argv)
     /* Verify the number of arguments is correct */
     if (argc < 4) {
         fprintf(stderr,
-                "Usage: %s <N value ([1,inf])> <M value ([1,inf])> <K value ([1,inf])>\n", argv[0]);
+                "Usage: %s <N value ([1,inf])> <M value ([1,inf])> <K value ([1,inf])>\n",
+                argv[0]);
         return ERROR_USAGE;
     }
 
@@ -464,9 +469,9 @@ int main(int argc, char **argv)
     /* Build the arguments */
     struct PSArgs args;
     args.D = get_D(N, K);   /* Get the standard directional vectors */
-    args.delta_0 = 0.25;    /* Set the initial delta */
-    args.tolerance = 0.0; /* Set the tolerance */
-    args.max_iter = 2000;   /* Set the maximum number of iterations */
+    args.delta_0 = 0.5;    /* Set the initial delta */
+    args.tolerance = 0.0001; /* Set the tolerance */
+    args.max_iter = 10000;   /* Set the maximum number of iterations */
     args.N = N;     /* Set the given N, M, & K */
     args.M = M;
     args.K = K;
@@ -477,8 +482,25 @@ int main(int argc, char **argv)
     /* Optimize the state and return a real-valued time domain alphabet */
     alphabet = optimize(start, args);
 
-    /* Print the error rate */
-    printf("Final total %lf%%\n", E(start, N, M, K, 10000) * 100);
+    printf("-----BEGIN-HEADER-----\n");
+    printf("#ifndef SYMBOLS_H\n");
+    printf("#define SYMBOLS_H\n");
+    printf("\n\n\n");
+    printf("#define N %d\n", N);
+    printf("#define N %d\n\n", M);
+    printf("double SYMBOLS[N][M] = {\n");
+    for (int i = 0; i < N; i++) {
+        printf("    {%lf", alphabet[i][0]);
+        for (int j = 1; j < M; j++) {
+            printf(", %lf", alphabet[i][j]);
+        }
+        printf("}");
+        if (i < N - 1)
+            printf(",\n");
+    }
+    printf("};\n\n");
+    printf("#endif\n");
+    printf("-----END-HEADER-----");
 
     return SUCCESS;
 }
