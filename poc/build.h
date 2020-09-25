@@ -138,12 +138,13 @@ set_neighbor(complex double *dest, complex double *state, int size,
  * Optimize the starting state using Pattern Search and the given parameters
  * ARGS  : state - The starting state to optimize
  *         args  - The arguments required for Pattern Search
+ *         *ber  - The destination to store the BER for the result
  * RETURN: A real-valued time domain for each symbol of the alphabet
  * INPUT :
- * OUTPUT:
+ * OUTPUT: *ber - The BER resulting from optimization
  */
 double**
-optimize(complex double *state, struct PSArgs args);
+optimize(complex double *state, struct PSArgs args, double *ber);
 
 /**
  * FUNCTION: E
@@ -160,7 +161,8 @@ optimize(complex double *state, struct PSArgs args);
  * INPUT :
  * OUTPUT:
  */
-double E(complex double *state, int N, int M, int K, int iter);
+double
+E(complex double *state, int N, int M, int K, int iter);
 
 /**
  * FUNCTION: state_to_time
@@ -175,7 +177,8 @@ double E(complex double *state, int N, int M, int K, int iter);
  * INPUT :
  * OUTPUT:
  */
-double** state_to_time(complex double *state, int N, int M, int K);
+double**
+state_to_time(complex double *state, int N, int M, int K);
 
 /**
  * FUNCTION: get_time_domain
@@ -190,7 +193,8 @@ double** state_to_time(complex double *state, int N, int M, int K);
  * INPUT :
  * OUTPUT:
  */
-double** get_time_domain(complex double **phi, int N, int M, int K);
+double**
+get_time_domain(complex double **phi, int N, int M, int K);
 
 /**
  * FUNCTION: to_time_domain
@@ -205,7 +209,8 @@ double** get_time_domain(complex double **phi, int N, int M, int K);
  * INPUT :
  * OUTPUT:
  */
-double* to_time_domain(complex double *phi, int N, int M, int K);
+double*
+to_time_domain(complex double *phi, int N, int M, int K);
 
 /**
  * FUNCTION: get_frequency_domain
@@ -219,7 +224,8 @@ double* to_time_domain(complex double *phi, int N, int M, int K);
  * INPUT :
  * OUTPUT:
  */
-complex double* get_frequency_domain(complex double *z, int N, int M, int K);
+complex double*
+get_frequency_domain(complex double *z, int N, int M, int K);
 
 #ifndef MIN_N
 #define MIN_N 1

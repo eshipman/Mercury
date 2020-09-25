@@ -139,7 +139,7 @@ void set_neighbor(complex double *dest, complex double *state, int size, complex
 }
 
 /* Optimize the starting state via Pattern Search */
-double** optimize(complex double *state, struct PSArgs args)
+double** optimize(complex double *state, struct PSArgs args, double *ber)
 {
     int min_index,  /* The index of the minimum scoring candidate state */
         n,      /* Dimensionality of the state vector */
@@ -229,6 +229,9 @@ double** optimize(complex double *state, struct PSArgs args)
         }
 
     }
+
+    /* Store the BER */
+    *ber = cost;
 
     /* Clean up memory */
     for (i = 0; i < P; i++)
@@ -412,6 +415,7 @@ int main(int argc, char **argv)
         K;      /* The number of subcarriers */
     char *ptr;  /* Pointer for passing to strtol() */
     double **alphabet;  /* The speech like symbols */
+    double ber; /* The BER for this alphabet */
 
     /* Verify the number of arguments is correct */
     if (argc < 4) {
@@ -480,12 +484,14 @@ int main(int argc, char **argv)
     complex double *start = initial_state(N, M, K);
 
     /* Optimize the state and return a real-valued time domain alphabet */
-    alphabet = optimize(start, args);
+    alphabet = optimize(start, args, &ber);
 
     printf("-----BEGIN-HEADER-----\n");
     printf("#ifndef SYMBOLS_H\n");
     printf("#define SYMBOLS_H\n");
-    printf("\n\n\n");
+    printf("\n\n/*\n");
+    printf("  These symbols have a BER of %e%%\n", ber * 100.0);
+    printf("\n*/\n\n");
     printf("#define N %d\n", N);
     printf("#define N %d\n\n", M);
     printf("double SYMBOLS[N][M] = {\n");
