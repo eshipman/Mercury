@@ -146,4 +146,124 @@ void simulate_gsm(double *signal, int length)
     }
 }
 
+/* Encode n bytes to 2n bytes with SECDED ECC */
+void secded_encode(uint8_t *out, uint8_t *data, size_t sz)
+{
+    uint8_t bits[8];    /* The list of the bits for each byte */
+    int i, j;   /* Loop counters */
+    
+    for (i = 0; i < sz; i += 2) {
+        uint8_t l8 = 0,
+                r8 = 0;
+        
+        /* Extract each bit */
+        for (j = 0; j < 8; j++)
+            bits[j] = (data[i] >> (7 - j)) & 0x01;
+        
+        /* Encode the most significant nibble as the first byte */
+        out[i] = (bits[0] ^ bits[1] ^ bits[3]) << 7
+               | (bits[0] ^ bits[2] ^ bits[3]) << 6
+               | (bits[0])                     << 5
+               | (bits[1] ^ bits[2] ^ bits[3]) << 4
+               | (bits[1])                     << 3
+               | (bits[2])                     << 2
+               | (bits[3])                     << 1;
+
+        /* Calculate the additional parity bit */
+        l8 =    (out[i] >> 7) ^ (out[i] >> 6) ^ (out[i] >> 5) ^ (out[i] >> 4)
+              ^ (out[i] >> 3) ^ (out[i] >> 2) ^ (out[i] >> 1) ^ out[i];
+
+        /* Set the last bit as the additional parity bit */
+        out[i] |= (l8 & 0x01);
+
+        /* Encode the least significant nibble as the second byte */
+        out[i+1] = (bits[4] ^ bits[5] ^ bits[7]) << 7
+                 | (bits[4] ^ bits[6] ^ bits[7]) << 6
+                 | (bits[4])                     << 5
+                 | (bits[5] ^ bits[6] ^ bits[7]) << 4
+                 | (bits[5])                     << 3
+                 | (bits[6])                     << 2
+                 | (bits[7])                     << 1;;
+
+        /* Calculate the additional parity bit */
+        r8 = (out[i+1] >> 7) ^ (out[i+1] >> 6) ^ (out[i+1] >> 5) ^ (out[i+1] >> 4)
+           ^ (out[i+1] >> 3) ^ (out[i+1] >> 2) ^ (out[i+1] >> 1) ^ out[i+1];
+
+        /* Set the last bit as the additional parity bit */
+        out[i+1] |= (r8 & 0x01);
+    }
+}
+
+/* Decode 2n bytes of SECDED ECC encoded data into n bytes of data */
+void secded_decode(uint8_t* out, uint8_t *data, size_t sz, int *cerr, int *derr)
+{
+    uint8_t bits[16];   /* The list of bits for each pair */
+    int i, j;   /* Loop counters */
+
+    /* Initialize the number of errors found to 0 */
+    *cerr = 0;
+    *derr = 0;
+
+    /* Loop through each pair of bytes */
+    for (i = 0; i < sz; i += 2) {
+        uint8_t l8 = 0,
+                r8 = 0;
+        uint8_t c[2][3],
+                c0 = 0,
+                c1 = 0;
+            
+        /* Get each bit individually and get the additional parity */
+        for (j = 0; j < 8; j++) {
+            bits[j] = (data[i] >> (7 - j)) & 0x01;
+            bits[j + 8] = (data[i + 1] >> (7 - j)) & 0x01;
+            l8 ^= bits[j];
+            r8 ^= bits[j + 8];
+        }
+
+        /* Determine the positions of any errors */
+        c[0][0] = bits[2] ^ bits[4] ^ bits[6] ^ bits[0];
+        c[0][1] = bits[2] ^ bits[5] ^ bits[6] ^ bits[1];
+        c[0][2] = bits[4] ^ bits[5] ^ bits[6] ^ bits[3];
+        c[1][0] = bits[10] ^ bits[12] ^ bits[14] ^ bits[8];
+        c[1][1] = bits[10] ^ bits[13] ^ bits[14] ^ bits[9];
+        c[1][2] = bits[12] ^ bits[13] ^ bits[14] ^ bits[11];
+        c0 = c[0][0] + 2 * c[0][1] + 4 * c[0][2];
+        c1 = c[1][0] + 2 * c[1][1] + 4 * c[1][2];
+
+        /* Decode the data bits */
+        out[i / 2] = bits[2]  << 7
+                   | bits[4]  << 6
+                   | bits[5]  << 5
+                   | bits[6]  << 4
+                   | bits[10] << 3
+                   | bits[12] << 2
+                   | bits[13] << 1
+                   | bits[14];
+
+        /* If errors occurred in the first byte, make the appropriate flips */
+        if (c0 != 0) {
+            out[i / 2] ^= 0x01 << c0;
+            *cerr += 1;
+        }
+        
+        /* If errors occurred in the second byte, make the appropriate flips */
+        if (c1 != 0) {
+            out[i / 2] ^= 0x01 << c1;
+            *cerr += 1;
+        }
+
+        /* Determine the expected additional parity bits */
+        l8 ^= bits[2] ^ bits[4] ^ bits[5] ^ bits[6] ^ c[0][0] ^ c[0][1] ^ c[0][2];
+        r8 ^= bits[10] ^ bits[12] ^ bits[13] ^ bits[14] ^ c[1][0] ^ c[1][1] ^ c[1][2];
+
+        /* If l8 is non-zero, a double error probably occurred */
+        if (l8)
+            *derr += 1;
+        
+        /* If r8 is non-zero, a double error probably occurred */
+        if (r8)
+            *derr += 1;
+    }
+}
+
 #endif

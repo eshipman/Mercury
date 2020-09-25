@@ -103,5 +103,36 @@ double norm(complex double z);
  */
 void simulate_gsm(double *signal, int length);
 
+/**
+ * FUNCTION: secded_encode
+ * -----------------------
+ * Encode the given bytes using SECDED (Single Error Correction, Double Error
+ * Detection). The result will always be twice the size of the input.
+ * ARGS  : out  - The destination to store the encoded result
+ *         data - The data to be encoded
+ *         sz   - The size of the input
+ * RETURN:
+ * INPUT :
+ * OUTPUT:
+ */
+void secded_encode(uint8_t *out, uint8_t *data, size_t sz);
+
+/**
+ * FUNCTION: secded_decode
+ * -----------------------
+ * Decode the given bytes as SECDED (Single Error Correction, Double Error
+ * Detection). The result will always be halve the size of the input.
+ * ARGS  : out   - The destination to store the decoded data
+ *         data  - The data to be decoded
+ *         sz    - The size of the input
+ *         *cerr - The destination to store the number of corrected errors
+ *         *derr - The destination to store the number of detected errors
+ * RETURN:
+ * INPUT :
+ * OUTPUT: *cerr - The number of errors in the input that were corrected
+ *         *derr - The number of errors in the input that could not be
+ *                 corrected but could be detected
+ */
+void secded_decode(uint8_t* out, uint8_t *data, size_t sz, int *cerr, int *derr);
 
 #endif
